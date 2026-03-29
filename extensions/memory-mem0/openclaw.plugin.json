@@ -1,0 +1,149 @@
+{
+  "id": "memory-mem0",
+  "kind": "memory",
+  "configSchema": {
+    "type": "object",
+    "additionalProperties": false,
+    "properties": {
+      "autoExtract": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "triggers": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["user", "assistant", "both"] }
+          },
+          "memoryTypes": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["semantic", "episodic", "procedural"] }
+          },
+          "proceduralNamespaces": {
+            "type": "array",
+            "items": { "type": "string", "enum": ["user_workflow", "execution_trace"] }
+          },
+          "minMessageLength": { "type": "number", "minimum": 1 },
+          "rateLimitSeconds": { "type": "number", "minimum": 0 },
+          "delta": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "strategy": { "type": "string", "enum": ["since_last_processed"] },
+              "maxMessagesPerRun": { "type": "number", "minimum": 1 }
+            }
+          }
+        }
+      },
+      "recall": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "maxInjectedMemories": { "type": "number", "minimum": 1 },
+          "maxInjectedChars": { "type": "number", "minimum": 1 },
+          "procedural": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "maxInjectedPatterns": { "type": "number", "minimum": 1 },
+              "injectAs": {
+                "type": "string",
+                "enum": ["workflow_preferences_section"]
+              }
+            }
+          }
+        }
+      },
+      "dedup": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "similarityThreshold": { "type": "number", "minimum": 0, "maximum": 1 },
+          "maxCandidates": { "type": "number", "minimum": 1 }
+        }
+      },
+      "store": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "path": { "type": "string" }
+        }
+      },
+      "sync": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "markdownToMem0": { "type": "boolean" },
+          "mem0ToMarkdown": { "type": "boolean" }
+        }
+      },
+      "feedback": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "enabled": { "type": "boolean" },
+          "review": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "mode": { "type": "string", "enum": ["owner_cli_only"] }
+            }
+          },
+          "derivedSignals": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "enabled": { "type": "boolean" },
+              "recallUsedEvidence": { "type": "string", "enum": ["explicit_only"] },
+              "neverRecalledAfterDays": { "type": "number", "minimum": 1 },
+              "supersededWithinTurns": { "type": "number", "minimum": 1 }
+            }
+          },
+          "reports": {
+            "type": "object",
+            "additionalProperties": false,
+            "properties": {
+              "redactByDefault": { "type": "boolean" },
+              "maxExcerptChars": { "type": "number", "minimum": 1 }
+            }
+          }
+        }
+      },
+      "scope": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "default": { "type": "string", "enum": ["allow", "deny"] },
+          "rules": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "additionalProperties": false,
+              "properties": {
+                "action": { "type": "string", "enum": ["allow", "deny"] },
+                "match": {
+                  "type": "object",
+                  "additionalProperties": false,
+                  "properties": {
+                    "chatType": { "type": "string", "enum": ["direct", "group", "channel"] }
+                  }
+                }
+              },
+              "required": ["action", "match"]
+            }
+          }
+        }
+      },
+      "llm": {
+        "type": "object",
+        "additionalProperties": false,
+        "properties": {
+          "provider": { "type": "string" },
+          "model": { "type": "string" }
+        }
+      }
+    }
+  }
+}

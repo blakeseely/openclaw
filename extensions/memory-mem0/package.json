@@ -1,0 +1,21 @@
+{
+  "name": "@openclaw/memory-mem0",
+  "version": "2026.2.22",
+  "private": true,
+  "description": "OpenClaw mem0-style memory plugin with typed capture, recall, and human review",
+  "type": "module",
+  "dependencies": {
+    "@sinclair/typebox": "0.34.48"
+  },
+  "devDependencies": {
+    "openclaw": "workspace:*"
+  },
+  "peerDependencies": {
+    "openclaw": ">=2026.1.26"
+  },
+  "openclaw": {
+    "extensions": [
+      "./index.ts"
+    ]
+  }
+}
