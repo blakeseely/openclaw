@@ -1,10 +1,17 @@
 import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
-import { Type } from "@sinclair/typebox";
+import { type TSchema, Type } from "@sinclair/typebox";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
-import { stringEnum } from "openclaw/plugin-sdk/channel-actions";
 import { jsonResult, readNumberParam, readStringParam } from "openclaw/plugin-sdk/memory-core";
+
+function stringEnum<T extends readonly string[]>(values: T, description?: string): TSchema {
+  return Type.Unsafe<T[number]>({
+    type: "string",
+    enum: [...values],
+    ...(description ? { description } : {}),
+  });
+}
 import {
   DEDUP_ACTIONS,
   MEMORY_TYPES,
@@ -422,11 +429,9 @@ const memoryPlugin = {
             "Explicitly add a memory item into mem0 store with type-aware deduplication.",
           parameters: Type.Object({
             text: Type.String({ description: "Memory content to store" }),
-            memoryType: Type.Optional(stringEnum(MEMORY_TYPES, { description: "Memory type" })),
+            memoryType: Type.Optional(stringEnum(MEMORY_TYPES, "Memory type")),
             namespace: Type.Optional(
-              stringEnum(["user_workflow", "execution_trace"] as const, {
-                description: "Procedural namespace",
-              }),
+              stringEnum(["user_workflow", "execution_trace"] as const, "Procedural namespace"),
             ),
           }),
           execute: async (_toolCallId: string, params: Record<string, unknown>) => {

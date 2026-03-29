@@ -11,7 +11,19 @@ import {
 } from "./extract.js";
 import type { ExistingMemoryCandidate } from "./storage.js";
 
-type RunEmbeddedPiAgentFn = (params: Record<string, unknown>) => Promise<{
+type RunEmbeddedPiAgentFn = (params: {
+  sessionId: string;
+  sessionKey?: string;
+  sessionFile: string;
+  workspaceDir: string;
+  config?: unknown;
+  prompt: string;
+  timeoutMs?: number;
+  runId?: string;
+  provider?: string;
+  model?: string;
+  disableTools?: boolean;
+}) => Promise<{
   payloads?: Array<{ text?: string; isError?: boolean }>;
 }>;
 
@@ -39,7 +51,7 @@ async function loadRunEmbeddedPiAgent(): Promise<RunEmbeddedPiAgentFn> {
       try {
         const mod = await import("../../src/agents/pi-embedded-runner.js");
         if (typeof mod.runEmbeddedPiAgent === "function") {
-          return mod.runEmbeddedPiAgent as RunEmbeddedPiAgentFn;
+          return mod.runEmbeddedPiAgent as unknown as RunEmbeddedPiAgentFn;
         }
         throw new Error("memory-mem0: runEmbeddedPiAgent not available");
       } catch (err) {
@@ -94,7 +106,8 @@ function normalizeMemoryText(text: string): string {
 }
 
 function resolveModelSelection(cfg: Mem0Config, api: OpenClawPluginApi): ModelSelection {
-  const primary = api.config?.agents?.defaults?.model?.primary;
+  const modelCfg = api.config?.agents?.defaults?.model;
+  const primary = typeof modelCfg === "string" ? modelCfg : modelCfg?.primary;
   const [primaryProvider, ...primaryModelParts] =
     typeof primary === "string" ? primary.split("/") : [];
   const primaryModel = primaryModelParts.join("/");
