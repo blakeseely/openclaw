@@ -1,6 +1,3 @@
-import fs from "node:fs/promises";
-import os from "node:os";
-import path from "node:path";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import type { DedupAction, Mem0Config, MemoryType, ProceduralNamespace } from "./config.js";
 import {
@@ -10,22 +7,6 @@ import {
   type ExtractedMemoryCandidate,
 } from "./extract.js";
 import type { ExistingMemoryCandidate } from "./storage.js";
-
-type RunEmbeddedPiAgentFn = (params: {
-  sessionId: string;
-  sessionKey?: string;
-  sessionFile: string;
-  workspaceDir: string;
-  config?: unknown;
-  prompt: string;
-  timeoutMs?: number;
-  runId?: string;
-  provider?: string;
-  model?: string;
-  disableTools?: boolean;
-}) => Promise<{
-  payloads?: Array<{ text?: string; isError?: boolean }>;
-}>;
 
 type ModelSelection = {
   provider: string;
@@ -42,34 +23,6 @@ export type LlmDedupDecision = {
 const INTERNAL_SESSION_KEY_PREFIX = "mem0-internal:";
 const LLM_TIMEOUT_MS = 35_000;
 const MAX_EXTRACTED_MEMORIES = 12;
-
-let runEmbeddedPiAgentPromise: Promise<RunEmbeddedPiAgentFn> | null = null;
-
-async function loadRunEmbeddedPiAgent(): Promise<RunEmbeddedPiAgentFn> {
-  if (!runEmbeddedPiAgentPromise) {
-    runEmbeddedPiAgentPromise = (async () => {
-      try {
-        const mod = await import("../../src/agents/pi-embedded-runner.js");
-        if (typeof mod.runEmbeddedPiAgent === "function") {
-          return mod.runEmbeddedPiAgent as unknown as RunEmbeddedPiAgentFn;
-        }
-        throw new Error("memory-mem0: runEmbeddedPiAgent not available");
-      } catch (err) {
-        throw new Error(
-          `memory-mem0: failed to load runEmbeddedPiAgent: ${err instanceof Error ? err.message : String(err)}`,
-        );
-      }
-    })();
-  }
-  return runEmbeddedPiAgentPromise;
-}
-
-function collectText(payloads?: Array<{ text?: string; isError?: boolean }>): string {
-  const texts = (payloads ?? [])
-    .filter((payload) => payload.isError !== true && typeof payload.text === "string")
-    .map((payload) => payload.text ?? "");
-  return texts.join("\n").trim();
-}
 
 function stripCodeFences(text: string): string {
   const trimmed = text.trim();
@@ -157,7 +110,6 @@ async function runJsonTask(params: {
   runLabel: string;
 }): Promise<LlmTaskResult> {
   const model = resolveModelSelection(params.cfg, params.api);
-  const runEmbeddedPiAgent = await loadRunEmbeddedPiAgent();
 
   const systemPrompt = [
     "You are a JSON-only function.",
@@ -167,40 +119,91 @@ async function runJsonTask(params: {
     "Do not call tools.",
   ].join(" ");
 
-  const prompt = `${systemPrompt}\n\nTASK:\n${params.instruction}\n\nINPUT_JSON:\n${JSON.stringify(
+  const message = `${systemPrompt}\n\nTASK:\n${params.instruction}\n\nINPUT_JSON:\n${JSON.stringify(
     params.input,
     null,
     2,
   )}`;
 
-  const tmpDir = await fs.mkdtemp(path.join(os.tmpdir(), "openclaw-mem0-llm-"));
-  try {
-    const runId = `${params.runLabel}-${Date.now()}`;
-    const result = await runEmbeddedPiAgent({
-      sessionId: runId,
-      sessionKey: buildInternalSessionKey(params.runLabel),
-      sessionFile: path.join(tmpDir, "session.json"),
-      workspaceDir: params.api.config?.agents?.defaults?.workspace ?? process.cwd(),
-      config: params.api.config,
-      prompt,
-      timeoutMs: LLM_TIMEOUT_MS,
-      runId,
-      provider: model.provider,
-      model: model.model,
-      disableTools: true,
-    });
-    const text = collectText(result.payloads);
-    if (!text) {
-      throw new Error("memory-mem0: model returned empty output");
-    }
-    return { json: parseJsonObject(text), model };
-  } finally {
-    try {
-      await fs.rm(tmpDir, { recursive: true, force: true });
-    } catch {
-      // ignore cleanup errors
-    }
+  const sessionKey = buildInternalSessionKey(params.runLabel);
+
+  const { runId } = await params.api.runtime.subagent.run({
+    sessionKey,
+    message,
+    provider: model.provider,
+    model: model.model,
+    deliver: false,
+  });
+
+  const waitResult = await params.api.runtime.subagent.waitForRun({
+    runId,
+    timeoutMs: LLM_TIMEOUT_MS,
+  });
+
+  if (waitResult.status !== "ok") {
+    throw new Error(
+      `memory-mem0: subagent run failed: ${waitResult.status}${waitResult.error ? ` — ${waitResult.error}` : ""}`,
+    );
   }
+
+  const session = await params.api.runtime.subagent.getSessionMessages({
+    sessionKey,
+    limit: 5,
+  });
+
+  // Extract the last assistant message text
+  const assistantMessages = (session.messages ?? []).filter(
+    (m: unknown) =>
+      m && typeof m === "object" && (m as Record<string, unknown>).role === "assistant",
+  );
+  const lastAssistant = assistantMessages.at(-1) as Record<string, unknown> | undefined;
+  const text = extractTextFromMessage(lastAssistant);
+
+  if (!text) {
+    throw new Error("memory-mem0: model returned empty output");
+  }
+
+  // Clean up the ephemeral session
+  try {
+    await params.api.runtime.subagent.deleteSession({ sessionKey, deleteTranscript: true });
+  } catch {
+    // ignore cleanup errors
+  }
+
+  return { json: parseJsonObject(text), model };
+}
+
+function extractTextFromMessage(msg: Record<string, unknown> | undefined): string {
+  if (!msg) {
+    return "";
+  }
+  // Handle string content
+  if (typeof msg.content === "string") {
+    return msg.content.trim();
+  }
+  // Handle array content (content blocks)
+  if (Array.isArray(msg.content)) {
+    return msg.content
+      .filter(
+        (block: unknown) =>
+          block && typeof block === "object" && (block as Record<string, unknown>).type === "text",
+      )
+      .map((block: unknown) => ((block as Record<string, unknown>).text as string) ?? "")
+      .join("\n")
+      .trim();
+  }
+  // Handle payloads format
+  if (Array.isArray(msg.payloads)) {
+    return msg.payloads
+      .filter(
+        (p: unknown) =>
+          p && typeof p === "object" && (p as Record<string, unknown>).isError !== true,
+      )
+      .map((p: unknown) => ((p as Record<string, unknown>).text as string) ?? "")
+      .join("\n")
+      .trim();
+  }
+  return "";
 }
 
 function normalizeNamespace(value: unknown): ProceduralNamespace | undefined {
