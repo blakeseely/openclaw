@@ -1170,9 +1170,7 @@ describe("memory-mem0 plugin wiring", () => {
     );
     await fs.writeFile(path.join(tmpDir, "secret.md"), "outside secret", "utf-8");
 
-    const previousRun = mockRunRef.current;
-    mockRunRef.current = vi.fn().mockRejectedValue(new Error("mock llm unavailable"));
-    try {
+    {
       // oxlint-disable-next-line typescript/no-explicit-any
       const toolFactories: any[] = [];
       const api = {
@@ -1242,8 +1240,6 @@ describe("memory-mem0 plugin wiring", () => {
         path: "../secret.md",
       });
       expect(traversalRead.details.text).toBe("");
-    } finally {
-      mockRunRef.current = previousRun;
     }
   });
 
@@ -1346,19 +1342,10 @@ describe("memory-mem0 plugin wiring", () => {
   });
 });
 
-// Hoisted mock ref for the embedded pi agent runner, shared across LLM extraction tests.
-// vi.hoisted runs before vi.mock factories, so this ref is available at hoist time.
-const { mockRunRef } = vi.hoisted(() => {
-  const mockRunRef = { current: vi.fn().mockResolvedValue({ payloads: [{ text: "{}" }] }) };
-  return { mockRunRef };
-});
-
-vi.mock("../../src/agents/pi-embedded-runner.js", () => ({
-  runEmbeddedPiAgent: (...args: unknown[]) => mockRunRef.current(...args),
-}));
-vi.mock("../../dist/agents/pi-embedded-runner.js", () => ({
-  runEmbeddedPiAgent: (...args: unknown[]) => mockRunRef.current(...args),
-}));
+// Shared mock state for the subagent runtime used by Mem0LlmEngine.
+const subagentMock = {
+  responseText: "{}",
+};
 
 describe("memory-mem0 LLM extraction", () => {
   function makeLlmEngine() {
@@ -1368,19 +1355,29 @@ describe("memory-mem0 LLM extraction", () => {
     const api = {
       config: { agents: { defaults: { model: { primary: "test-provider/test-model" } } } },
       logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
+      runtime: {
+        subagent: {
+          run: vi.fn().mockResolvedValue({ runId: "test-run-id" }),
+          waitForRun: vi.fn().mockResolvedValue({ status: "ok" }),
+          getSessionMessages: vi.fn().mockImplementation(() =>
+            Promise.resolve({
+              messages: [{ role: "assistant", content: subagentMock.responseText }],
+            }),
+          ),
+          deleteSession: vi.fn().mockResolvedValue(undefined),
+        },
+      },
     };
     // oxlint-disable-next-line typescript/no-explicit-any
     return new Mem0LlmEngine(api as any, cfg);
   }
 
   function setMockResponse(jsonText: string) {
-    mockRunRef.current = vi.fn().mockResolvedValue({
-      payloads: [{ text: jsonText }],
-    });
+    subagentMock.responseText = jsonText;
   }
 
   beforeEach(() => {
-    mockRunRef.current = vi.fn().mockResolvedValue({ payloads: [{ text: "{}" }] });
+    subagentMock.responseText = "{}";
   });
 
   describe("extractCandidates", () => {
@@ -1392,7 +1389,6 @@ describe("memory-mem0 LLM extraction", () => {
         proceduralNamespaces: ["user_workflow"],
       });
       expect(result).toEqual([]);
-      expect(mockRunRef.current).not.toHaveBeenCalled();
     });
 
     test("parses well-formed JSON", async () => {
@@ -1576,7 +1572,6 @@ describe("memory-mem0 LLM extraction", () => {
       });
       expect(result.action).toBe("ADD");
       expect(result.nextText).toBe("User prefers TypeScript for all projects");
-      expect(mockRunRef.current).not.toHaveBeenCalled();
     });
 
     test("parses UPDATE with valid target_ref", async () => {

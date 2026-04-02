@@ -120,6 +120,8 @@ export type StoredMemory = {
   sourceRelPath: string | null;
   sourceExcerpt: string | null;
   sourceMessageIndex: number | null;
+  category: string | null;
+  importance: number | null;
   createdAt: number;
   updatedAt: number;
 };
@@ -134,6 +136,8 @@ export type MemorySearchHit = {
   source: "memory";
   memoryType: MemoryType;
   namespace: ProceduralNamespace | null;
+  category: string | null;
+  importance: number | null;
 };
 
 export type MemoryCandidateWrite = {
@@ -143,6 +147,8 @@ export type MemoryCandidateWrite = {
   sourceRelPath?: string;
   sourceExcerpt?: string;
   sourceMessageIndex?: number;
+  category?: string;
+  importance?: number;
 };
 
 export type MemoryWriteResult = {
@@ -331,6 +337,9 @@ function rowToStoredMemory(row: Record<string, unknown>): StoredMemory {
       typeof row.source_message_index === "number" && Number.isFinite(row.source_message_index)
         ? Math.floor(row.source_message_index)
         : null,
+    category: typeof row.category === "string" ? row.category : null,
+    importance:
+      typeof row.importance === "number" && Number.isFinite(row.importance) ? row.importance : null,
     createdAt: typeof row.created_at === "number" ? row.created_at : Number(row.created_at ?? 0),
     updatedAt: typeof row.updated_at === "number" ? row.updated_at : Number(row.updated_at ?? 0),
   };
@@ -596,6 +605,16 @@ export class Mem0Store {
     } catch {
       // already exists for upgraded stores
     }
+    try {
+      this.db.exec(`ALTER TABLE memories ADD COLUMN category TEXT;`);
+    } catch {
+      // already exists for upgraded stores
+    }
+    try {
+      this.db.exec(`ALTER TABLE memories ADD COLUMN importance REAL;`);
+    } catch {
+      // already exists for upgraded stores
+    }
   }
 
   getCursor(agentId: string, sessionKey: string): number {
@@ -784,6 +803,8 @@ export class Mem0Store {
         source: "memory",
         memoryType: memory.memoryType,
         namespace: memory.namespace,
+        category: memory.category,
+        importance: memory.importance,
       });
     }
 
@@ -1022,9 +1043,11 @@ export class Mem0Store {
                 source_rel_path,
                 source_excerpt,
                 source_message_index,
+                category,
+                importance,
                 created_at,
                 updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
           )
           .run(
@@ -1037,6 +1060,8 @@ export class Mem0Store {
             normalizeSourceRelPath(candidate.sourceRelPath),
             candidate.sourceExcerpt ?? null,
             candidate.sourceMessageIndex ?? null,
+            candidate.category ?? null,
+            candidate.importance ?? null,
             now,
             now,
           );
@@ -1085,9 +1110,11 @@ export class Mem0Store {
                 source_rel_path,
                 source_excerpt,
                 source_message_index,
+                category,
+                importance,
                 created_at,
                 updated_at
-              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+              ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             `,
           )
           .run(
@@ -1100,6 +1127,8 @@ export class Mem0Store {
             normalizeSourceRelPath(candidate.sourceRelPath),
             candidate.sourceExcerpt ?? null,
             candidate.sourceMessageIndex ?? null,
+            candidate.category ?? null,
+            candidate.importance ?? null,
             now,
             now,
           );
@@ -1250,9 +1279,11 @@ export class Mem0Store {
               source_rel_path,
               source_excerpt,
               source_message_index,
+              category,
+              importance,
               created_at,
               updated_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           `,
         )
         .run(
@@ -1265,6 +1296,8 @@ export class Mem0Store {
           sourceRelPath,
           sourceExcerpt,
           sourceMessageIndex,
+          candidate.category ?? null,
+          candidate.importance ?? null,
           params.now,
           params.now,
         );

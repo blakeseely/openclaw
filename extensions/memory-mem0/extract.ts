@@ -13,6 +13,8 @@ export type ExtractedMemoryCandidate = {
   text: string;
   sourceExcerpt: string;
   sourceMessageIndex: number;
+  category?: string;
+  importance?: number;
 };
 
 const PROMPT_INJECTION_PATTERNS = [
