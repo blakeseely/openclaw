@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { fallbackCategoryFromType, getCategoryImportance, isValidCategory } from "./categories.js";
 import type { DedupAction, Mem0Config, MemoryType, ProceduralNamespace } from "./config.js";
@@ -144,6 +145,7 @@ async function runJsonTask(params: {
     provider: model.provider,
     model: model.model,
     deliver: false,
+    idempotencyKey: `mem0-${params.runLabel}-${Date.now()}-${randomUUID().slice(0, 8)}`,
   });
 
   const waitResult = await params.api.runtime.subagent.waitForRun({
