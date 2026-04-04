@@ -12,6 +12,7 @@ function stringEnum<T extends readonly string[]>(values: T, description?: string
     ...(description ? { description } : {}),
   });
 }
+import { fallbackCategoryFromType, getCategoryImportance } from "./categories.js";
 import {
   DEDUP_ACTIONS,
   MEMORY_TYPES,
@@ -372,6 +373,9 @@ const memoryPlugin = {
                   ? "user_workflow"
                   : undefined;
 
+            const category = fallbackCategoryFromType(memoryType, namespace);
+            const importance = getCategoryImportance(category);
+
             const writes = store.upsertMemories({
               agentId,
               sessionKey: ctx.sessionKey,
@@ -383,6 +387,8 @@ const memoryPlugin = {
                   namespace,
                   text,
                   sourceExcerpt: text,
+                  category,
+                  importance,
                 },
               ],
             });

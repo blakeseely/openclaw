@@ -1188,6 +1188,8 @@ export class Mem0Store {
               source_rel_path = ?,
               source_excerpt = ?,
               source_message_index = ?,
+              category = COALESCE(?, category),
+              importance = COALESCE(?, importance),
               session_key = ?,
               updated_at = ?
             WHERE id = ?
@@ -1198,6 +1200,8 @@ export class Mem0Store {
           normalizeSourceRelPath(candidate.sourceRelPath) ?? best.memory.sourceRelPath,
           candidate.sourceExcerpt ?? null,
           candidate.sourceMessageIndex ?? null,
+          candidate.category ?? null,
+          candidate.importance ?? null,
           params.sessionKey ?? null,
           now,
           best.memory.id,
@@ -1431,6 +1435,8 @@ export class Mem0Store {
             source_rel_path = ?,
             source_excerpt = ?,
             source_message_index = ?,
+            category = COALESCE(?, category),
+            importance = COALESCE(?, importance),
             session_key = ?,
             updated_at = ?
           WHERE id = ? AND agent_id = ?
@@ -1441,6 +1447,8 @@ export class Mem0Store {
         sourceRelPath ?? target.sourceRelPath,
         sourceExcerpt,
         sourceMessageIndex,
+        candidate.category ?? null,
+        candidate.importance ?? null,
         params.sessionKey,
         params.now,
         target.id,

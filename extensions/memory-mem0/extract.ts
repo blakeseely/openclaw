@@ -1,3 +1,4 @@
+import { fallbackCategoryFromType, getCategoryImportance } from "./categories.js";
 import type { MemoryType, ProceduralNamespace } from "./config.js";
 import { normalizeForSimilarity } from "./storage.js";
 
@@ -224,12 +225,17 @@ function pushCandidate(params: {
   }
   params.dedupe.add(key);
 
+  const category = fallbackCategoryFromType(params.memoryType, params.namespace);
+  const importance = getCategoryImportance(category);
+
   params.out.push({
     memoryType: params.memoryType,
     namespace: params.namespace,
     text: normalizedText,
     sourceExcerpt: truncate(params.sourceExcerpt, 320),
     sourceMessageIndex: params.sourceMessageIndex,
+    category,
+    importance,
   });
 }
 
