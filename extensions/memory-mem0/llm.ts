@@ -1,4 +1,3 @@
-import { randomUUID } from "node:crypto";
 import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
 import { fallbackCategoryFromType, getCategoryImportance, isValidCategory } from "./categories.js";
 import type { DedupAction, Mem0Config, MemoryType, ProceduralNamespace } from "./config.js";
@@ -102,10 +101,6 @@ function resolveModelSelection(cfg: Mem0Config, api: OpenClawPluginApi): ModelSe
   };
 }
 
-function buildInternalSessionKey(prefix: string): string {
-  return `${INTERNAL_SESSION_KEY_PREFIX}${prefix}:${Date.now()}`;
-}
-
 type LlmTaskResult = {
   json: unknown;
   model: ModelSelection;
@@ -131,97 +126,69 @@ async function runJsonTask(params: {
 
   const systemPrompt = params.systemPrompt ?? DEFAULT_SYSTEM_PROMPT;
 
-  const message = `${systemPrompt}\n\nTASK:\n${params.instruction}\n\nINPUT_JSON:\n${JSON.stringify(
+  const userMessage = `TASK:\n${params.instruction}\n\nINPUT_JSON:\n${JSON.stringify(
     params.input,
     null,
     2,
   )}`;
 
-  const sessionKey = buildInternalSessionKey(params.runLabel);
-
-  const { runId } = await params.api.runtime.subagent.run({
-    sessionKey,
-    message,
+  // Resolve API key for the configured provider
+  const auth = await params.api.runtime.modelAuth.resolveApiKeyForProvider({
     provider: model.provider,
-    model: model.model,
-    deliver: false,
-    idempotencyKey: `mem0-${params.runLabel}-${Date.now()}-${randomUUID().slice(0, 8)}`,
-    extraSystemPrompt:
-      "CRITICAL OVERRIDE: You are a JSON-only function for this request. " +
-      "Return ONLY valid JSON. No markdown, no explanations, no tool calls, no conversation. " +
-      "The user message contains your complete instructions and input data. " +
-      "Respond with the JSON result and nothing else.",
   });
-
-  const waitResult = await params.api.runtime.subagent.waitForRun({
-    runId,
-    timeoutMs: LLM_TIMEOUT_MS,
-  });
-
-  if (waitResult.status !== "ok") {
+  const apiKey = auth?.apiKey;
+  if (!apiKey) {
     throw new Error(
-      `memory-mem0: subagent run failed: ${waitResult.status}${waitResult.error ? ` — ${waitResult.error}` : ""}`,
+      `memory-mem0: no API key resolved for provider "${model.provider}". Configure auth via openclaw models auth login.`,
     );
   }
 
-  const session = await params.api.runtime.subagent.getSessionMessages({
-    sessionKey,
-    limit: 5,
-  });
+  // Direct Anthropic Messages API call — bypasses the subagent pipeline
+  // so we get clean JSON without tools, memory injection, or agent context.
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), LLM_TIMEOUT_MS);
 
-  // Extract the last assistant message text
-  const assistantMessages = (session.messages ?? []).filter(
-    (m: unknown) =>
-      m && typeof m === "object" && (m as Record<string, unknown>).role === "assistant",
-  );
-  const lastAssistant = assistantMessages.at(-1) as Record<string, unknown> | undefined;
-  const text = extractTextFromMessage(lastAssistant);
-
-  if (!text) {
-    throw new Error("memory-mem0: model returned empty output");
-  }
-
-  // Clean up the ephemeral session
   try {
-    await params.api.runtime.subagent.deleteSession({ sessionKey, deleteTranscript: true });
-  } catch {
-    // ignore cleanup errors
-  }
+    const response = await fetch("https://api.anthropic.com/v1/messages", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-api-key": apiKey,
+        "anthropic-version": "2023-06-01",
+      },
+      body: JSON.stringify({
+        model: model.model,
+        max_tokens: 4096,
+        system: systemPrompt,
+        messages: [{ role: "user", content: userMessage }],
+      }),
+      signal: controller.signal,
+    });
 
-  return { json: parseJsonObject(text), model };
-}
+    if (!response.ok) {
+      const errorBody = await response.text().catch(() => "");
+      throw new Error(
+        `memory-mem0: Anthropic API error ${response.status}: ${errorBody.slice(0, 200)}`,
+      );
+    }
 
-function extractTextFromMessage(msg: Record<string, unknown> | undefined): string {
-  if (!msg) {
-    return "";
-  }
-  // Handle string content
-  if (typeof msg.content === "string") {
-    return msg.content.trim();
-  }
-  // Handle array content (content blocks)
-  if (Array.isArray(msg.content)) {
-    return msg.content
-      .filter(
-        (block: unknown) =>
-          block && typeof block === "object" && (block as Record<string, unknown>).type === "text",
-      )
-      .map((block: unknown) => ((block as Record<string, unknown>).text as string) ?? "")
+    const result = (await response.json()) as {
+      content?: Array<{ type: string; text?: string }>;
+    };
+    const text = (result.content ?? [])
+      .filter((block) => block.type === "text" && typeof block.text === "string")
+      .map((block) => block.text ?? "")
       .join("\n")
       .trim();
+
+    if (!text) {
+      throw new Error("memory-mem0: model returned empty output");
+    }
+
+    return { json: parseJsonObject(text), model };
+  } finally {
+    clearTimeout(timeout);
   }
-  // Handle payloads format
-  if (Array.isArray(msg.payloads)) {
-    return msg.payloads
-      .filter(
-        (p: unknown) =>
-          p && typeof p === "object" && (p as Record<string, unknown>).isError !== true,
-      )
-      .map((p: unknown) => ((p as Record<string, unknown>).text as string) ?? "")
-      .join("\n")
-      .trim();
-  }
-  return "";
 }
 
 function normalizeNamespace(value: unknown): ProceduralNamespace | undefined {

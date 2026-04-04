@@ -1342,8 +1342,8 @@ describe("memory-mem0 plugin wiring", () => {
   });
 });
 
-// Shared mock state for the subagent runtime used by Mem0LlmEngine.
-const subagentMock = {
+// Shared mock state for the direct Anthropic API call used by Mem0LlmEngine.
+const fetchMock = {
   responseText: "{}",
 };
 
@@ -1356,15 +1356,12 @@ describe("memory-mem0 LLM extraction", () => {
       config: { agents: { defaults: { model: { primary: "test-provider/test-model" } } } },
       logger: { info: () => {}, warn: () => {}, error: () => {}, debug: () => {} },
       runtime: {
-        subagent: {
-          run: vi.fn().mockResolvedValue({ runId: "test-run-id" }),
-          waitForRun: vi.fn().mockResolvedValue({ status: "ok" }),
-          getSessionMessages: vi.fn().mockImplementation(() =>
-            Promise.resolve({
-              messages: [{ role: "assistant", content: subagentMock.responseText }],
-            }),
-          ),
-          deleteSession: vi.fn().mockResolvedValue(undefined),
+        modelAuth: {
+          resolveApiKeyForProvider: vi.fn().mockResolvedValue({
+            apiKey: "test-api-key",
+            source: "test",
+            mode: "api-key",
+          }),
         },
       },
     };
@@ -1373,11 +1370,26 @@ describe("memory-mem0 LLM extraction", () => {
   }
 
   function setMockResponse(jsonText: string) {
-    subagentMock.responseText = jsonText;
+    fetchMock.responseText = jsonText;
   }
 
   beforeEach(() => {
-    subagentMock.responseText = "{}";
+    fetchMock.responseText = "{}";
+    vi.spyOn(globalThis, "fetch").mockImplementation(() =>
+      Promise.resolve(
+        new Response(
+          JSON.stringify({ content: [{ type: "text", text: fetchMock.responseText }] }),
+          {
+            status: 200,
+            headers: { "Content-Type": "application/json" },
+          },
+        ),
+      ),
+    );
+  });
+
+  afterEach(() => {
+    vi.restoreAllMocks();
   });
 
   describe("extractCandidates", () => {
