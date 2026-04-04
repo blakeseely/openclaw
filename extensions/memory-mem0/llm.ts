@@ -146,6 +146,11 @@ async function runJsonTask(params: {
     model: model.model,
     deliver: false,
     idempotencyKey: `mem0-${params.runLabel}-${Date.now()}-${randomUUID().slice(0, 8)}`,
+    extraSystemPrompt:
+      "CRITICAL OVERRIDE: You are a JSON-only function for this request. " +
+      "Return ONLY valid JSON. No markdown, no explanations, no tool calls, no conversation. " +
+      "The user message contains your complete instructions and input data. " +
+      "Respond with the JSON result and nothing else.",
   });
 
   const waitResult = await params.api.runtime.subagent.waitForRun({
