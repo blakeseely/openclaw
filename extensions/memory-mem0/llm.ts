@@ -1,4 +1,4 @@
-import type { OpenClawPluginApi } from "openclaw/plugin-sdk";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/memory-core";
 import { fallbackCategoryFromType, getCategoryImportance, isValidCategory } from "./categories.js";
 import type { DedupAction, Mem0Config, MemoryType, ProceduralNamespace } from "./config.js";
 import {
