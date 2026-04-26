@@ -427,7 +427,7 @@ const memoryPlugin = {
             }),
         });
       },
-      { commands: [] },
+      { commands: ["memory"] },
     );
 
     const tryRecallInject = async (params: {

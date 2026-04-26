@@ -957,6 +957,16 @@ importers:
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
 
+  extensions/memory-mem0:
+    dependencies:
+      '@sinclair/typebox':
+        specifier: 0.34.48
+        version: 0.34.48
+    devDependencies:
+      openclaw:
+        specifier: workspace:*
+        version: link:../..
+
   extensions/memory-wiki:
     dependencies:
       typebox:
@@ -969,16 +979,6 @@ importers:
       '@openclaw/plugin-sdk':
         specifier: workspace:*
         version: link:../../packages/plugin-sdk
-      openclaw:
-        specifier: workspace:*
-        version: link:../..
-
-  extensions/memory-mem0:
-    dependencies:
-      '@sinclair/typebox':
-        specifier: 0.34.49
-        version: 0.34.49
-    devDependencies:
       openclaw:
         specifier: workspace:*
         version: link:../..
@@ -3865,6 +3865,9 @@ packages:
 
   '@silvia-odwyer/photon-node@0.3.4':
     resolution: {integrity: sha512-bnly4BKB3KDTFxrUIcgCLbaeVVS8lrAkri1pEzskpmxu9MdfGQTy8b8EgcD83ywD3RPMsIulY8xJH5Awa+t9fA==}
+
+  '@sinclair/typebox@0.34.48':
+    resolution: {integrity: sha512-kKJTNuK3AQOrgjjotVxMrCn1sUJwM76wMszfq1kdU4uYVJjvEWuFQ6HgvLt4Xz3fSmZlTOxJ/Ie13KnIcWQXFA==}
 
   '@slack/bolt@4.7.2':
     resolution: {integrity: sha512-ALHtaS2iaP2WAWgX08yXsoCxEDitC6AqZs26ot6smXJQzBFMM4slVP+w3blLwzUV551xZ/+9RlBmWHsZDJJ5HA==}
@@ -10523,6 +10526,8 @@ snapshots:
   '@shikijs/vscode-textmate@10.0.2': {}
 
   '@silvia-odwyer/photon-node@0.3.4': {}
+
+  '@sinclair/typebox@0.34.48': {}
 
   '@slack/bolt@4.7.2(@types/express@5.0.6)':
     dependencies:
