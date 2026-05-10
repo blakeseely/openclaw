@@ -2,12 +2,9 @@ import { randomUUID } from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 import { type TSchema, Type } from "@sinclair/typebox";
-import {
-  type OpenClawPluginApi,
-  jsonResult,
-  readNumberParam,
-  readStringParam,
-} from "openclaw/plugin-sdk/memory-core";
+import { jsonResult } from "openclaw/plugin-sdk/core";
+import { readNumberParam, readStringParam } from "openclaw/plugin-sdk/param-readers";
+import type { OpenClawPluginApi } from "openclaw/plugin-sdk/plugin-entry";
 
 function stringEnum<T extends readonly string[]>(values: T, description?: string): TSchema {
   return Type.Unsafe<T[number]>({
